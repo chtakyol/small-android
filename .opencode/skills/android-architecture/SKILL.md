@@ -47,3 +47,49 @@ com.[package].[appname]
 - Use `object` for singletons and companion factories
 - Scope coroutines to `viewModelScope` in ViewModel, `lifecycleScope` in Activity/Fragment
 - Favour `extension functions` over utility classes
+
+## 3. Multi-module Gradle architecture
+
+Follow Google's "Now in Android" pattern — split the app into isolated Gradle modules for faster builds, feature isolation, and testability.
+
+### Module structure
+
+```
+small-android/
+├── app/                          # :app — Android application module, wiring only
+├── core/
+│   ├── core-common/              # :core:common — extensions, utils, base classes
+│   ├── core-domain/              # :core:domain — models, repository interfaces, use cases
+│   ├── core-data/                # :core:data — repository impls, local/remote, infrastructure
+│   ├── core-datastore/           # :core:datastore — DataStore preferences
+│   ├── core-database/            # :core:database — Room database, DAOs, entities
+│   ├── core-network/             # :core:network — Retrofit/OkHttp, API services, DTOs
+│   ├── core-designsystem/        # :core:designsystem — theme, shared composables, design tokens
+│   ├── core-ui/                  # :core:ui — shared UI components, navigation helpers
+│   └── core-di/                  # :core:di — Koin modules shared across features
+├── feature/
+│   ├── feature-home/             # :feature:home — Screen, ViewModel, components
+│   ├── feature-detail/           # :feature:detail
+│   └── feature-settings/         # :feature:settings
+└── gradle/                       # Convention plugins (build-logic)
+```
+
+### Dependency rules
+
+- **Direction**: `app` → `feature:*` → `core:*`. Features depend on `core:domain` and `core:ui`, never on other features. `core:data` depends on `core:domain`, never the reverse.
+- **Feature isolation**: Each feature module is self-contained (Screen + ViewModel + components). Features communicate via navigation, not direct imports.
+- **Core layering**: `core:domain` has zero Android dependencies (pure Kotlin). `core:data` implements domain interfaces. `core:ui`/`core:designsystem` for shared Compose.
+- **DI per module**: Each module exposes its own Koin module. `app` aggregates all modules.
+- **Build convention plugins**: Shared Gradle config in `build-logic/` to avoid duplication across modules.
+
+### When to add a feature module
+
+- When a feature has 3+ screens or complex navigation
+- When a feature has its own data sources (API, database) that shouldn't leak into other features
+- When build times become a problem (feature modules compile in parallel)
+
+### When to keep it in `app`
+
+- Simple apps with 1-2 screens
+- Prototypes and MVPs
+- When the overhead of multi-module isn't justified yet
